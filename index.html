@@ -1,0 +1,1626 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lottery Platform</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@600;700&display=swap');
+
+        :root {
+            --primary-color: #facc15;
+            --secondary-color: #5b626d;
+            --accent-color: #facc15;
+            --text-dark: #6B7A8F;
+            --text-light: #ffffff;
+            --chart-bg-dark: rgba(255, 255, 255, 0.1);
+            --chart-bg-light: #ffffff;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            line-height: 1.5;
+            min-height: 100vh;
+            transition: background 0.3s ease;
+        }
+
+        h1, h2, h3, h4 {
+            font-family: 'Poppins', sans-serif;
+            font-weight: 700;
+        }
+
+        .dark-theme {
+            background: linear-gradient(135deg, #6B7A8F 0%, #99310C 100%);
+            color: var(--text-light);
+        }
+
+        .light-theme {
+            background: linear-gradient(135deg, #B3C8CF 0%, #d18469 100%);
+            color: var(--text-dark);
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(12px);
+            border-radius: 16px;
+            padding: 2rem;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .dark-theme .card {
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+        }
+
+        .light-theme .card {
+            background: #ffffff;
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
+        }
+
+        .card:hover {
+            transform: translateY(-4px);
+        }
+
+        .btn-primary {
+            background: var(--primary-color);
+            color: var(--text-dark);
+            padding: 0.875rem 1.75rem;
+            border-radius: 10px;
+            font-weight: 600;
+            transition: background 0.3s ease, transform 0.2s ease;
+        }
+
+        .btn-primary:hover {
+            background: #fa625f;
+            transform: scale(1.03);
+        }
+
+        .btn-secondary {
+            background: var(--secondary-color);
+            color: var(--text-light);
+            padding: 0.875rem 1.75rem;
+            border-radius: 10px;
+            font-weight: 600;
+            transition: background 0.3s ease, transform 0.2s ease;
+        }
+
+        .btn-secondary:hover {
+            background: #6b7280;
+            transform: scale(1.03);
+        }
+
+        input, button {
+            border-radius: 10px;
+            padding: 0.875rem;
+            font-size: 1rem;
+            transition: all 0.2s ease;
+        }
+
+        .dark-theme input {
+            background: #4b5563;
+            color: var(--text-light);
+            border: none;
+        }
+
+        .light-theme input {
+            background: #f1f5f9;
+            color: var(--text-dark);
+            border: 1px solid #e5e7eb;
+        }
+
+        input:focus {
+            outline: none;
+            ring: 2px solid var(--primary-color);
+        }
+
+        #share-slider {
+            accent-color: var(--accent-color);
+        }
+
+        #share-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 24px;
+            height: 24px;
+            background: var(--accent-color);
+            border-radius: 50%;
+            border: 3px solid var(--text-light);
+            cursor: pointer;
+        }
+        #quiz-result span {
+            font-size: 1.5rem;
+        }
+        #quiz-result span::before {
+            content: '★';
+            color: #f59e0b; /* Yellow for filled stars */
+        }
+        #quiz-result span:empty::before {
+            color: #d1d5db; /* Gray for empty stars */
+        }
+        .toast {
+            position: fixed;
+            bottom: 1.5rem;
+            right: 1.5rem;
+            background: var(--primary-color);
+            color: var(--text-dark);
+            padding: 1rem 1.5rem;
+            border-radius: 10px;
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        .fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+
+        @keyframes fadeIn {
+            0% { opacity: 0; transform: translateY(12px); }
+            100% { opacity: 1; transform: translateY(0); }
+        }
+
+        .pulse {
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 0.7; }
+            50% { transform: scale(1.15); opacity: 1; }
+            100% { transform: scale(1); opacity: 0.7; }
+        }
+
+        /* Number Selection Grid */
+        .number-selection-grid {
+            display: grid;
+            grid-template-columns: repeat(10, minmax(0, 1fr));
+            gap: 0.75rem;
+            justify-items: center;
+        }
+
+        .extra-number-grid {
+            display: grid;
+            grid-template-columns: repeat(6, minmax(0, 1fr));
+            gap: 0.75rem;
+            justify-items: center;
+        }
+
+        .number-btn {
+            width: 48px;
+            height: 48px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            font-size: 1rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .number-btn.unselected {
+            background: #4b5563;
+            color: var(--text-light);
+        }
+
+        .number-btn.selected {
+            background: var(--primary-color);
+            color: var(--text-dark);
+        }
+
+        .number-btn:hover {
+            transform: scale(1.05);
+        }
+
+        /* Basket Dropdown */
+        .basket-container {
+            position: relative;
+        }
+
+        .basket-dropdown {
+            display: none;
+            position: absolute;
+            top: 100%;
+            right: 0;
+            background: var(--chart-bg-dark);
+            border-radius: 10px;
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+            padding: 1rem;
+            min-width: 200px;
+            z-index: 10;
+        }
+
+        .light-theme .basket-dropdown {
+            background: var(--chart-bg-light);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
+        }
+
+        .basket-container:hover .basket-dropdown {
+            display: block;
+        }
+
+        .basket-badge {
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            background: var(--primary-color);
+            color: var(--text-dark);
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        /* Chart Styling */
+        .chart-container {
+            max-width: 800px;
+            min-height: 400px;
+            margin: 0 auto;
+        }
+
+        /* Responsive Adjustments */
+        @media (max-width: 768px) {
+            .number-selection-grid {
+                grid-template-columns: repeat(8, minmax(0, 1fr));
+            }
+
+            .extra-number-grid {
+                grid-template-columns: repeat(4, minmax(0, 1fr));
+            }
+
+            .chart-container {
+                max-width: 100%;
+                min-width: 300px;
+                min-height: 350px;
+            }
+        }
+
+        @media (max-width: 640px) {
+            .card {
+                padding: 1.5rem;
+            }
+
+            .btn-primary, .btn-secondary {
+                padding: 0.75rem 1.25rem;
+            }
+
+            .number-selection-grid {
+                grid-template-columns: repeat(6, minmax(0, 1fr));
+                gap: 0.5rem;
+            }
+
+            .extra-number-grid {
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+                gap: 0.5rem;
+            }
+
+            .number-btn {
+                width: 40px;
+                height: 40px;
+                font-size: 0.875rem;
+            }
+
+            .basket-dropdown {
+                min-width: 150px;
+            }
+        }
+            #knowledge-box-screen {
+                min-height: 100vh;
+            }
+            #knowledge-box-screen.hidden {
+                display: none !important;
+            }
+            #knowledge-box-screen .grid > div {
+                transition: transform 0.3s ease !important;
+            }
+            #knowledge-box-screen .grid > div:hover {
+                transform: scale(1.05) translateY(-4px) !important;
+            }
+            #knowledge-box-screen img {
+                transition: transform 0.3s ease !important;
+            }
+            #knowledge-box-screen h2,
+            #knowledge-box-screen p {
+                color: #ffffff;
+            }
+            .light #knowledge-box-screen h2,
+            .light #knowledge-box-screen p {
+                color: #1e1b4b !important;
+            }
+            #book-detail-screen {
+                min-height: 100vh;
+            }
+            #book-detail-screen.hidden {
+                display: none !important;
+            }
+            #book-detail-screen h2,
+            #book-detail-screen h3,
+            #book-detail-screen p,
+            #book-detail-screen label {
+                color: #ffffff;
+            }
+            .light #book-detail-screen h2,
+            .light #book-detail-screen h3,
+            .light #book-detail-screen p,
+            .light #book-detail-screen label {
+                color: #1e1b4b !important;
+            }
+            #quiz-questions input[type="radio"] {
+                accent-color: #2dd4bf;
+            }
+            #submit-quiz {
+                transition: background-color 0.2s;
+            }
+    </style>
+</head>
+<body class="dark-theme min-h-screen">
+    <!-- Navigation -->
+    <nav class="w-full bg-gray-400 dark:bg-gray-400 light:bg-white p-4 fixed top-0 z-20 shadow-lg">
+        <div class="max-w-7xl mx-auto flex justify-between items-center">
+            <div class="flex items-center">
+                <button id="logo-btn" class="focus:outline-none">
+                     <img src="logo-red.png" alt="logo" class="h-14 mr-3">
+                </button>
+                <h1 class="text-2xl font-bold text-white light:bg-grey-200"></h1>
+            </div>
+            <div class="flex items-center space-x-4">
+                <div class="flex items-center space-x-2 text-white light:text-gray-900">
+                <button id="knowledge-box-btn" class="flex items-center text-white light:text-gray-900 text-sm font-medium hover:text-teal-400 transition-colors">
+                    <svg class="w-5 h-5 mr-1" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm0-14c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6-2.69-6-6-6zm0 10c-2.21 0-4-1.79-4-4s1.79-4 4-4 4 1.79 4 4-1.79-4-4-4z"/>
+                    </svg>
+                    Knowledge Box
+                </button>
+                    <svg class="w-6 h-6 text-yellow-400" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                    </svg>
+                    <span id="points-counter" class="text-sm font-medium">0</span>
+                    <span id="stars-display" class="ml-2 text-yellow-500"></span> <!-- Added for stars -->
+                </div>
+                <div class="basket-container relative">
+                    <button id="basket-btn" class="text-white light:bg-gray-400 relative">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                        </svg>
+                        <span id="basket-count" class="basket-badge hidden">0</span>
+                    </button>
+                    <div id="basket-dropdown" class="basket-dropdown">
+                        <p id="basket-empty" class="text-black">Your basket is empty.</p>
+                        <ul id="basket-tickets" class="space-y-2 hidden"></ul>
+                    </div>
+                </div>
+                <button id="theme-toggle" class="text-white light:bg-grey-200 text-sm font-medium">🌙 Dark</button>
+                <button id="logout-btn" class="text-white light:bg-grey-200 hover:text-gray-300 text-sm font-medium hidden">Logout</button>
+            </div>
+        </div>
+    </nav>
+
+
+<!-- Auth Screen -->
+<div id="auth-screen" class="text-center max-w-md mx-auto px-4 mt-40">
+    <h2 class="text-4xl font-bold mb-8 fade-in">Welcome Back</h2>
+    <form id="auth-form" class="card p-8 space-y-6">
+        <input id="email" type="email" placeholder="Email" class="w-full border-none focus:ring-2 focus:ring-teal-400 p-4" aria-label="Email">
+        <input id="password" type="password" placeholder="Password" class="w-full border-none focus:ring-2 focus:ring-teal-400 p-4" aria-label="Password">
+        <div class="flex space-x-4">
+            <button type="submit" id="signup-btn" class="btn-primary w-full">Sign Up</button>
+            <button type="submit" id="login-btn" class="btn-secondary w-full">Sign In</button>
+        </div>
+        <p class="text-sm text-gray-800">or sign in with</p>
+        <div class="flex justify-center space-x-4">
+            <button id="google-login" class="btn-secondary p-2.5" aria-label="Sign in with Gmail">
+                <svg class="w-6 h-6" fill="white" viewBox="0 0 24 24">
+                    <!-- Gmail envelope icon (white fill, change to fill="#D93025" for red) -->
+                    <path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/>
+                </svg>
+            </button>
+            <button id="apple-login" class="btn-secondary p-2.5" aria-label="Sign in with Apple">
+                <svg class="w-6 h-6" fill="white" viewBox="0 0 24 24">
+                    <!-- Apple logo with bitten apple -->
+                    <path d="M16.5 2.5c-1.3 1.6-1.1 3.9-.3 5.7-1.6-.1-3.4-1.1-4.4-2.8-1.1-1.8-1.8-3.9-1.4-6 .9.1 2.2.7 3.1 1.7 1 .9 1.7 2.3 1.7 3.4zm4.5 6.3c-1.8-2.3-4.3-3.7-7.2-3.7-1.6 0-3 .5-4.1 1.4-.9.7-1.6 1.7-2.1 2.9-1.2 2.5-.9 5.7.8 8.1.8 1.1 1.9 2 3.3 2.6.7.3 1.5.5 2.3.5 1 0 2-.3 3-.8 1.2-.6 2.3-1.4 3.2-2.6.3-.4.6-.9.8-1.4-1.6-.8-2.7-2.5-2.6-4.2 0-1.3.5-2.5 1.3-3.5z"/>
+                </svg>
+            </button>
+            <button id="microsoft-login" class="btn-secondary p-2.5" aria-label="Sign in with Microsoft">
+                <svg class="w-6 h-6" fill="white" viewBox="0 0 24 24">
+                    <!-- Microsoft four squares logo -->
+                    <path d="M11.5 0H0v11.5h11.5V0zm12.5 0H12.5v11.5H24V0zM11.5 12.5H0V24h11.5V12.5zm12.5 0H12.5V24H24V12.5z"/>
+                </svg>
+            </button>
+        </div>
+    </form>
+    <div id="auth-message" class="toast hidden"></div>
+</div>
+    <!-- Profile Screen -->
+    <div id="profile-screen" class="hidden max-w-7xl mx-auto px-4 mb-24 mt-40">
+        <h2 class="text-4xl font-bold mb-10 fade-in">Your Dashboard</h2>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div class="card p-6 cursor-pointer fade-in" data-section="ticket-submissions">
+                <h3 class="text-xl font-semibold mb-2">Ticket Submissions</h3>
+                <p class="text-gray-300">View all your submitted tickets.</p>
+            </div>
+            <div class="card p-6 cursor-pointer fade-in" data-section="results-payouts">
+                <h3 class="text-xl font-semibold mb-2">Results & Payouts</h3>
+                <p class="text-gray-300">Check your game results and earnings.</p>
+            </div>
+            <div class="card p-6 cursor-pointer fade-in" data-section="total-payouts">
+                <h3 class="text-xl font-semibold mb-2">Total Payouts</h3>
+                <p class="text-gray-300">See your cumulative winnings.</p>
+            </div>
+            <div class="card p-6 cursor-pointer fade-in" data-section="add-card">
+                <h3 class="text-xl font-semibold mb-2">Add Card</h3>
+                <p class="text-gray-300">Link a payment method.</p>
+            </div>
+            <div class="card p-6 cursor-pointer fade-in" data-section="modify-profile">
+                <h3 class="text-xl font-semibold mb-2">Modify Profile</h3>
+                <p class="text-gray-300">Update your personal details.</p>
+            </div>
+            <div class="card p-6 text-center fade-in">
+                <button id="play-btn" class="btn-primary w-full">Join the Action</button>
+            </div>
+        </div>
+        <div id="section-content" class="mt-8 mb-24 card p-8 hidden">
+            <div id="ticket-submissions" class="hidden">
+                <h3 class="text-xl font-semibold mb-4">Ticket Submissions</h3>
+                <ul class="space-y-3">
+                    <li class="text-gray-300">Ticket #1234 - Lotto (Pending)</li>
+                    <li class="text-gray-300">Ticket #5678 - EuroMillions (Active)</li>
+                    <li class="text-gray-300">Lotto (02/01/2024): 4/6 Numbers - £24</li>
+                    <li class="text-gray-300">EuroMillions (13/02/2024): 3/7 Numbers - £12</li>
+                </ul>
+            </div>
+            <div id="results-payouts" class="hidden">
+                <h3 class="text-xl font-semibold mb-4">Results & Payouts</h3>
+                <div class="chart-container">
+                    <canvas id="results-chart"></canvas>
+                </div>
+                <ul class="space-y-3 mt-4">
+                    <li class="text-gray-300">Lotto (01/01/2025): 3/6 Numbers - £10</li>
+                    <li class="text-gray-300">EuroMillions (12/05/2024): 2/7 Numbers - £5</li>
+                    <li class="text-gray-300">Lotto (02/01/2024): 4/6 Numbers - £24</li>
+                    <li class="text-gray-300">EuroMillions (13/02/2024): 3/7 Numbers - £12</li>
+                </ul>
+            </div>
+            <div id="total-payouts" class="hidden mb-24">
+                <h3 class="text-xl font-semibold mb-4">Total Payouts</h3>
+                <!-- <p class="text-lg font-bold mb-4">£15</p> -->
+                <div class="chart-container">
+                    <canvas id="payouts-chart"></canvas>
+                </div>
+            </div>
+            <div id="add-card" class="hidden mb-24">
+                <h3 class="text-xl font-semibold mb-4">Add Card</h3>
+                <form id="add-card-form" class="space-y-5">
+                    <input type="text" placeholder="Card Number" class="w-full border-none focus:ring-2 focus:ring-teal-300 p-4" aria-label="Card Number">
+                    <input type="text" placeholder="Expiry Date" class="w-projects/3d-viewer-files/public/3d-viewer.htmlfull border-none focus:ring-2 focus:ring-teal-300 p-4" aria-label="Expiry Date">
+                    <input type="text" placeholder="CVC" class="w-full border-none focus:ring-2 focus:ring-teal-300 p-4" aria-label="CVC">
+                    <button type="submit" class="btn-secondary w-full">Add Card</button>
+                </form>
+            </div>
+            <div id="modify-profile" class="hidden mb-24">
+                <h3 class="text-xl font-semibold mb-4">Modify Profile</h3>
+                <form id="modify-profile-form" class="space-y-5">
+                    <input id="first-name" type="text" placeholder="First Name" class="w-full border-none focus:ring-2 focus:ring-teal-300 p-4" aria-label="First Name">
+                    <input id="last-name" type="text" placeholder="Last Name" class="w-full border-none focus:ring-2 focus:ring-teal-300 p-4" aria-label="Last Name">
+                    <input id="profile-email" type="email" placeholder="Email" class="w-full border-none focus:ring-2 focus:ring-teal-300 p-4" aria-label="Email">
+                    <button type="submit" class="btn-secondary w-full">Save Changes</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Game Selection Screen -->
+    <div id="game-selection-screen" class="hidden max-w-5xl mx-auto px-4 mt-40">
+        <h2 class="text-4xl font-bold mb-10 fade-in">Choose Your Game</h2>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div class="card p-6 text-center cursor-pointer fade-in" style="background: #e91e63;" data-game="lotto">
+                <h3 class="text-xl font-semibold mb-2 text-white">Lotto</h3>
+                <p class="text-sm text-gray">Pick 6 numbers from 1-59. Draws Wed/Sat.</p>
+            </div>
+            <div class="card p-6 text-center cursor-pointer fade-in" style="background: #0288d1;" data-game="euromillions">
+                <h3 class="text-xl font-semibold mb-2 text-white">EuroMillions</h3>
+                <p class="text-sm text-gray">Pick 5 numbers from 1-50 + 2 stars. Draws Tue/Fri.</p>
+            </div>
+            <div class="card p-6 text-center cursor-pointer fade-in" style="background: #7b1fa2;" data-game="thunderball">
+                <h3 class="text-xl font-semibold mb-2 text-white">Thunderball</h3>
+                <p class="text-sm text-gray">Pick 5 numbers from 1-39 + 1 Thunderball. Draws Tue/Wed/Fri/Sat.</p>
+            </div>
+            <div class="card p-6 text-center cursor-pointer fade-in" style="background: #d81b60;" data-game="setforlife">
+                <h3 class="text-xl font-semibold mb-2 text-white">Set For Life</h3>
+                <p class="text-sm text-gray">Pick 5 numbers from 1-47 + 1 Life Ball. Draws Mon/Thu.</p>
+            </div>
+        </div>
+        <h4 class="text-2xl mb-10 mt-24 fade-in"> More coming soon ...</h4>
+        
+    </div>
+
+    <!-- Ticket Selection Screen -->
+    <div id="ticket-selection-screen" class="hidden max-w-4xl mx-auto px-4 mt-40">
+        <h2 class="text-4xl font-bold mb-10 fade-in" id="game-title">Select Your Ticket</h2>
+        <div class="space-y-8">
+            <div class="card p-8 fade-in">
+                <h3 class="text-xl font-semibold mb-4">How to Play</h3>
+                <p id="game-hint" class="text-gray-300"></p>
+            </div>
+            <div class="card p-8 fade-in">
+                <h3 class="text-xl font-semibold mb-4">Choose Your Numbers</h3>
+                <div id="number-selection" class="space-y-6"></div>
+                <button id="add-ticket-btn" class="btn-primary mt-6 w-full">Add Ticket</button>
+            </div>
+            <div class="card p-8 fade-in">
+                <h3 class="text-xl font-semibold mb-4">Link National Lottery Account</h3>
+                <input id="account-id" type="text" placeholder="Enter Account ID" class="w-full border-none focus:ring-2 focus:ring-teal-400 p-4" aria-label="Account ID">
+                <button id="link-account-btn" class="btn-secondary mt-6 w-full">Link Account</button>
+            </div>
+            <div class="card p-8 fade-in">
+                <h3 class="text-xl font-semibold mb-4">Selected Tickets</h3>
+                <ul id="selected-tickets" class="space-y-3"></ul>
+                <button id="proceed-btn" class="btn-secondary mt-6 w-full">Proceed to Investment</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Investment Screen -->
+    <div id="investment-screen" class="hidden max-w-4xl mx-auto mb-8 px-4 mt-40">
+        <h2 class="text-4xl font-bold mb-10 fade-in">Invest & Insure</h2>
+        <div class="space-y-8">
+            <div class="card p-8 fade-in">
+                <h3 class="text-xl font-semibold mb-4">Your Tickets</h3>
+                <ul id="investment-tickets" class="space-y-3"></ul>
+            </div>
+            <div class="card p-8 fade-in">
+                <h3 class="text-xl font-semibold mb-4">Insurance Options (£0.25 each)</h3>
+                <label class="flex items-center space-x-3 mb-3">
+                    <input id="basic-insurance" type="checkbox" class="form-checkbox h-5 w-5 text-teal-400">
+                    <span class="text-gray-300">Basic Insurance</span>
+                </label>
+                <label class="flex items-center space-x-3">
+                    <input id="premium-insurance" type="checkbox" class="form-checkbox h-5 w-5 text-teal-400">
+                    <span class="text-gray-300">Premium Insurance</span>
+                </label>
+            </div>
+            <div class="card p-8 fade-in">
+                <h3 class="text-xl font-semibold mb-4">Play Mode</h3>
+                <div class="flex space-x-4">
+                    <button id="easy-mode" class="btn-primary flex-1">Easy Mode</button>
+                    <button id="advanced-mode" class="btn-primary flex-1">Advanced Mode</button>
+                    <button id="ai-mode" class="btn-primary flex-1">AI Mode</button>
+                </div>
+            </div>
+            <div class="card p-8 fade-in">
+                <h3 class="text-xl font-semibold mb-4">Investment Shares (1-80)</h3>
+                <input id="share-slider" type="range" min="1" max="80" value="1" class="w-full h-2 rounded-lg">
+                <p class="mt-3">Shares: <span id="share-count">1</span> (£<span id="share-cost">0.25</span>)</p>
+            </div>
+            <div class="card p-8 fade-in">
+                <h3 class="text-xl font-semibold mb-4">Live Stats</h3>
+                <p>Active Players: <span id="live-players">0</span></p>
+                <p>Win Chance: <span id="win-chance">0%</span></p>
+            </div>
+            <button id="to-payment-btn" class="btn-secondary w-full">Proceed to Payment</button>
+        </div>
+    </div>
+
+    <!-- Payment Screen -->
+    <div id="payment-screen" class="hidden max-w-md mx-auto px-4 mt-40">
+        <h2 class="text-4xl font-bold mb-10 fade-in">Payment</h2>
+        <div class="card p-8 fade-in">
+            <h3 class="text-xl font-semibold mb-4">Total: £<span id="total-cost">0.00</span></h3>
+            <div class="space-y-5">
+                <label class="flex items-center space-x-3">
+                    <input type="radio" name="payment" value="visa" class="form-radio h-5 w-5 text-teal-400">
+                    <img src="https://upload.wikimedia.org/wikipedia/commons/4/41/Visa_Logo.png" alt="Visa" class="h-6">
+                    <span>Visa</span>
+                </label>
+                <label class="flex items-center space-x-3">
+                    <input type="radio" name="payment" value="paypal" class="form-radio h-5 w-5 text-teal-400">
+                    <img src="https://www.paypalobjects.com/webstatic/mktg/logo/pp_cc_mark_111x69.jpg" alt="PayPal" class="h-6">
+                    <span>PayPal</span>
+                </label>
+              
+            </div>
+            <button id="pay-btn" class="btn-primary mt-6 w-full">Pay Now</button>
+        </div>
+        <div id="payment-message" class="text-center mt-8 hidden">
+            <h3 class="text-2xl font-bold text-teal-400 fade-in">Congratulations!</h3>
+            <p class="text-lg text-gray-300 mt-2">Good luck in your lottery games!</p>
+            <div class="pulse mt-4">
+                <svg class="w-12 h-12 text-teal-400 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                </svg>
+            </div>
+        </div>
+    </div>
+
+	<!-- knowledge-box-screen -->
+	<div id="knowledge-box-screen" class="screen hidden max-w-5xl mx-auto px-4 mb-24 mt-40 min-h-screen" data-screen="knowledge-box">
+		<h2 class="text-4xl font-bold text-white light:text-gray-900 mb-10 fade-in">Knowledge Box</h2>
+        <h4 class="text-xl text-white light:text-gray-900 mb-10 fade-in">Read book series and answer questions to earn points, enhancing your lottery experience.</h4>
+		<div class="grid grid-cols-2 md:grid-cols-4 gap-6">
+            <div class="flex flex-col items-center cursor-pointer" onclick="showScreen('book-detail-screen', 'life')">
+				<img src="Knowledge/1.jpg" alt="life Books" class="h-50 w-42 object-cover rounded-lg shadow-md hover:scale-105 transition-transform">
+				<p class="text-white light:text-gray-900 mt-3 font-semibold">life</p>
+			</div>
+			<div class="flex flex-col items-center cursor-pointer" onclick="showScreen('book-detail-screen', 'time management')">
+				<img src="Knowledge/2.jpg" alt="Time Management Books" class="h-50 w-42 object-cover rounded-lg shadow-md hover:scale-105 transition-transform">
+				<p class="text-white light:text-gray-900 mt-3 font-semibold">Time Management</p>
+			</div>
+			<div class="flex flex-col items-center cursor-pointer" onclick="showScreen('book-detail-screen', 'AI automate')">
+				<img src="Knowledge/27.jpg" alt="Finance Books" class="h-50 w-42 object-cover rounded-lg shadow-md hover:scale-105 transition-transform">
+				<p class="text-white light:text-gray-900 mt-3 font-semibold">AI Automate</p>
+			</div>
+			<div class="flex flex-col items-center cursor-pointer" onclick="showScreen('book-detail-screen', 'productivity')">
+				<img src="Knowledge/11.jpg" alt="Productivity Books" class="h-50 w-42 object-cover rounded-lg shadow-md hover:scale-105 transition-transform">
+				<p class="text-white light:text-gray-900 mt-3 font-semibold">Productivity</p>
+			</div>
+			<div class="flex flex-col items-center cursor-pointer" onclick="showScreen('book-detail-screen', 'crime')">
+				<img src="Knowledge/18.jpg" alt="Crime Books" class="h-50 w-42 object-cover rounded-lg shadow-md hover:scale-105 transition-transform">
+				<p class="text-white light:text-gray-900 mt-3 font-semibold">Crime</p>
+			</div>
+			<div class="flex flex-col items-center cursor-pointer" onclick="showScreen('book-detail-screen', 'life')">
+				<img src="Knowledge/10.jpg" alt="Life Books" class="h-50 w-42 object-cover rounded-lg shadow-md hover:scale-105 transition-transform">
+				<p class="text-white light:text-gray-900 mt-3 font-semibold">Life</p>
+			</div>
+			<div class="flex flex-col items-center cursor-pointer" onclick="showScreen('book-detail-screen', 'business')">
+				<img src="Knowledge/12.jpg" alt="Business Books" class="h-50 w-42 object-cover rounded-lg shadow-md hover:scale-105 transition-transform">
+				<p class="text-white light:text-gray-900 mt-3 font-semibold">Business</p>
+			</div>
+			<div class="flex flex-col items-center  cursor-pointer" onclick="showScreen('book-detail-screen', 'entertainment')">
+				<img src="Knowledge/16.jpg" alt="Entertainment Books" class="h-50 w-42 object-cover rounded-lg shadow-md hover:scale-105 transition-transform">
+				<p class="text-white light:text-gray-900 mt-3 font-semibold">Entertainment</p>
+			</div>
+			<div class="flex flex-col items-center cursor-pointer" onclick="showScreen('book-detail-screen', 'self-help')">
+				<img src="Knowledge/8.jpg" alt="Self-Help Books" class="h-50 w-42 object-cover rounded-lg shadow-md hover:scale-105 transition-transform">
+				<p class="text-white light:text-gray-900 mt-3 font-semibold">Self-Help</p>
+			</div>
+			<div class="flex flex-col items-center cursor-pointer" onclick="showScreen('book-detail-screen', 'nostalgic')">
+				<img src="Knowledge/23.jpg" alt="Leadership Books" class="h-50 w-42 object-cover rounded-lg shadow-md hover:scale-105 transition-transform">
+				<p class="text-white light:text-gray-900 mt-3 font-semibold">Nostalgic</p>
+			</div>
+			<div class="flex flex-col items-center cursor-pointer" onclick="showScreen('book-detail-screen', 'story')">
+				<img src="Knowledge/4.jpg" alt="Story Books" class="h-50 w-42 object-cover rounded-lg shadow-md hover:scale-105 transition-transform">
+				<p class="text-white light:text-gray-900 mt-3 font-semibold">Story</p>
+			</div>
+			<div class="flex flex-col items-center cursor-pointer" onclick="showScreen('book-detail-screen', 'productivity')">
+				<img src="Knowledge/14.jpg" alt="Productivity Books" class="h-50 w-42 object-cover rounded-lg shadow-md hover:scale-105 transition-transform">
+				<p class="text-white light:text-gray-900 mt-3 font-semibold">Productivity</p>
+			</div>
+		</div>
+	</div>
+
+       <!-- book-detail-screen -->
+<div id="book-detail-screen" class="screen hidden max-w-5xl mx-auto px-4 mt-40 min-h-screen" data-screen="book-detail">
+    <h2 id="book-title" class="text-4xl font-bold text-white light:text-gray-900 mb-8 fade-in">Book Series</h2>
+    <div class="mb-10">
+        <h3 class="text-2xl font-semibold text-white light:text-gray-900 mb-4">Watch the Animation</h3>
+        <div class="relative w-full" style="padding-bottom: 56.25%;">
+            <img id="book-gif" class="absolute top-0 left-0 w-full h-full object-cover rounded-lg shadow-md" src="Knowledge/vid.gif" alt="Book Animation">
+        </div>
+    </div>
+    <div id="quiz-section" class="mb-16">
+        <h3 class="text-2xl font-semibold text-white light:text-gray-900 mb-6">Quiz Time</h3>
+        <div id="quiz-progress" class="text-white light:text-gray-900 mb-4 text-lg"></div>
+        <div id="quiz-questions" class="space-y-6"></div>
+        <div id="quiz-navigation" class="mt-6 flex space-x-4">
+            <button id="next-quiz" class="px-6 py-3 bg-teal-400 text-white rounded-md font-semibold hover:bg-teal-500 transition-colors duration-300">Next</button>
+            <button id="submit-quiz" class="px-6 py-3 bg-teal-400 text-white rounded-md font-semibold hover:bg-teal-500 transition-colors duration-300 hidden">Submit Answers</button>
+        </div>
+        <p id="quiz-result" class="text-white light:text-gray-900 mt-4 text-lg font-semibold hidden"></p>
+    </div>
+    <script>
+        const quiz = [
+            { question: 'What do AI automate books focus on?', options: ['Cooking', 'Automation', 'Poetry', 'Dance'], correct: 'Automation' },
+            { question: 'What is an AI application?', options: ['Baking', 'Machine Learning', 'Painting', 'Singing'], correct: 'Machine Learning' },
+            { question: 'What do AI books often discuss?', options: ['Recipes', 'Ethics', 'Songs', 'Games'], correct: 'Ethics' }
+        ];
+
+        let currentQuestion = 0;
+
+        // Function to render the current question
+        function renderQuiz() {
+            const quizContainer = document.getElementById('quiz-questions');
+            const progressElement = document.getElementById('quiz-progress');
+            const nextButton = document.getElementById('next-quiz');
+            const submitButton = document.getElementById('submit-quiz');
+
+            // Clear existing content
+            quizContainer.innerHTML = '';
+
+            // Update progress
+            progressElement.textContent = `Question ${currentQuestion + 1} of ${quiz.length}`;
+
+            // Render current question
+            const q = quiz[currentQuestion];
+            const questionDiv = document.createElement('div');
+            questionDiv.className = 'question bg-gray-800 light:bg-white p-6 rounded-lg shadow-lg transform transition-all duration-500 ease-in-out opacity-0 animate-fade-in';
+            questionDiv.innerHTML = `
+                <p class="text-lg font-medium text-white light:text-gray-900 mb-4">${currentQuestion + 1}. ${q.question}</p>
+                <div class="options space-y-3">
+                    ${q.options.map(option => `
+                        <label class="block p-3 bg-gray-700 light:bg-gray-100 rounded-md hover:bg-gray-600 light:hover:bg-gray-200 transition-colors duration-200 cursor-pointer">
+                            <input type="radio" name="question-${currentQuestion}" value="${option}" class="mr-2 accent-teal-400">
+                            <span class="text-white light:text-gray-900">${option}</span>
+                        </label>
+                    `).join('')}
+                </div>
+            `;
+            quizContainer.appendChild(questionDiv);
+
+            // Show/hide buttons
+            if (currentQuestion === quiz.length - 1) {
+                nextButton.classList.add('hidden');
+                submitButton.classList.remove('hidden');
+            } else {
+                nextButton.classList.remove('hidden');
+                submitButton.classList.add('hidden');
+            }
+        }
+
+        // Function to check answers and display result
+        function checkAnswers() {
+            let score = 0;
+            quiz.forEach((q, index) => {
+                const selectedOption = document.querySelector(`input[name="question-${index}"]:checked`);
+                if (selectedOption && selectedOption.value === q.correct) {
+                    score++;
+                }
+            });
+            const resultElement = document.getElementById('quiz-result');
+            resultElement.textContent = `You got ${score} out of ${quiz.length} correct!`;
+            resultElement.classList.remove('hidden');
+            resultElement.classList.add(score === quiz.length ? 'text-green-400' : score > 0 ? 'text-yellow-400' : 'text-red-400');
+            document.getElementById('quiz-navigation').classList.add('hidden'); // Hide navigation after submission
+        }
+
+        // CSS for fade-in animation
+        const style = document.createElement('style');
+        style.innerHTML = `
+            @keyframes fade-in {
+                from { opacity: 0; transform: translateY(10px); }
+                to { opacity: 1; transform: translateY(0); }
+            }
+            .animate-fade-in {
+                animation: fade-in 0.5s ease-in-out forwards;
+            }
+        `;
+        document.head.appendChild(style);
+
+        // Event listeners
+        document.getElementById('next-quiz').addEventListener('click', () => {
+            const selected = document.querySelector(`input[name="question-${currentQuestion}"]:checked`);
+            if (selected) {
+                currentQuestion++;
+                renderQuiz();
+            } else {
+                alert('Please select an answer before moving to the next question.');
+            }
+        });
+
+        document.getElementById('submit-quiz').addEventListener('click', () => {
+            const selected = document.querySelector(`input[name="question-${currentQuestion}"]:checked`);
+            if (selected) {
+                checkAnswers();
+            } else {
+                alert('Please select an answer before submitting.');
+            }
+        });
+
+        // Render first question on page load
+        renderQuiz();
+    </script>
+</div>
+
+    <script>
+        // File Data Handling
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+            return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+            if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+                try {
+                    var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                    var firstSheetName = workbook.SheetNames[0];
+                    var worksheet = workbook.Sheets[firstSheetName];
+                    var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                    var filteredData = jsonData.filter(row => row.some(filledCell));
+                    var headerRowIndex = filteredData.findIndex((row, index) =>
+                        row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                    );
+                    if (headerRowIndex === -1 || headerRowIndex > 25) {
+                        headerRowIndex = 0;
+                    }
+                    var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex));
+                    csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                    return csv;
+                } catch (e) {
+                    console.error(e);
+                    return "";
+                }
+            }
+            return gk_fileData[filename] || "";
+        }
+
+        // State
+        let theme = 'dark-theme';
+        let currentScreen = 'auth';
+        let user = null;
+        let selectedGame = '';
+        let selectedNumbers = [];
+        let extraNumbers = [];
+        let tickets = [];
+        let shares = 1;
+        let insurance = { basic: false, premium: false };
+        let mode = '';
+
+        // Screen Management
+        const screens = ['auth-screen', 'profile-screen', 'game-selection-screen', 'ticket-selection-screen', 'investment-screen', 'payment-screen', 'knowledge-box-screen', 'book-detail-screen'];
+        function showScreen(screenId) {
+            screens.forEach(id => {
+                document.getElementById(id).classList.add('hidden');
+            });
+            document.getElementById(screenId).classList.remove('hidden');
+            currentScreen = screenId;
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        // Theme Toggle
+        document.getElementById('theme-toggle').addEventListener('click', () => {
+            theme = theme === 'dark-theme' ? 'light-theme' : 'dark-theme';
+            document.body.className = `min-h-screen ${theme}`;
+            document.getElementById('theme-toggle').textContent = theme === 'dark-theme' ? '🌙 Dark' : '☀️ Light';
+            updateCharts();
+        });
+
+        // Toast Notification
+        function showToast(message) {
+            const toast = document.getElementById('auth-message');
+            toast.textContent = message;
+            toast.classList.remove('hidden');
+            setTimeout(() => {
+                toast.classList.add('hidden');
+            }, 3000);
+        }
+
+        // Basket Management
+        function updateBasket() {
+            const basketCount = document.getElementById('basket-count');
+            const basketEmpty = document.getElementById('basket-empty');
+            const basketTickets = document.getElementById('basket-tickets');
+            basketCount.textContent = tickets.length;
+            basketCount.classList.toggle('hidden', tickets.length === 0);
+            basketEmpty.classList.toggle('hidden', tickets.length > 0);
+            basketTickets.classList.toggle('hidden', tickets.length === 0);
+            basketTickets.innerHTML = '';
+            tickets.forEach(ticket => {
+                const li = document.createElement('li');
+                li.textContent = ticket.accountId ? `Linked: #${ticket.accountId} (${ticket.game})` : `Ticket: ${ticket.numbers.join(', ')}${ticket.extra?.length > 0 ? ` + ${ticket.extra.join(', ')}` : ''} (${ticket.game})`;
+                li.className = 'text-gray-300 text-sm';
+                basketTickets.appendChild(li);
+            });
+        }
+
+// Chart Management
+let resultsChart = null;
+let payoutsChart = null;
+
+function createCharts() {
+    // Results & Payouts Bar Chart
+    const resultsCtx = document.getElementById('results-chart')?.getContext('2d');
+    if (resultsCtx) {
+        resultsChart = new Chart(resultsCtx, {
+            type: 'bar',
+            data: {
+                labels: ['Lotto (01/01/2025)', 'EuroMillions (12/25/2024)', 'Thunderball (02/01/2025)', 'Set For Life (01/15/2025)'],
+                datasets: [{
+                    label: 'Winnings (£)',
+                    data: [10, 5, 8, 12],
+                    backgroundColor: theme === 'dark-theme' ? [
+                        'rgba(45, 212, 191, 0.6)',  // Teal for Lotto
+                        'rgba(30, 27, 75, 0.6)',    // Dark Blue for EuroMillions
+                        'rgba(250, 204, 21, 0.6)',  // Yellow for Thunderball
+                        'rgba(75, 85, 99, 0.6)'     // Gray for Set For Life
+                    ] : [
+                        'rgba(45, 212, 191, 0.8)',  // Teal for Lotto
+                        'rgba(30, 27, 75, 0.8)',    // Dark Blue for EuroMillions
+                        'rgba(250, 204, 21, 0.8)',  // Yellow for Thunderball
+                        'rgba(75, 85, 99, 0.8)'     // Gray for Set For Life
+                    ],
+                    borderColor: theme === 'dark-theme' ? [
+                        'rgba(45, 212, 191, 1)',    // Teal
+                        'rgba(30, 27, 75, 1)',      // Dark Blue
+                        'rgba(250, 204, 21, 1)',    // Yellow
+                        'rgba(75, 85, 99, 1)'       // Gray
+                    ] : [
+                        'rgba(45, 212, 191, 1)',    // Teal
+                        'rgba(30, 27, 75, 1)',      // Dark Blue
+                        'rgba(250, 204, 21, 1)',    // Yellow
+                        'rgba(75, 85, 99, 1)'       // Gray
+                    ],
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Winnings (£)',
+                            color: theme === 'dark-theme' ? '#ffffff' : '#1e1b4b'
+                        },
+                        ticks: {
+                            color: theme === 'dark-theme' ? '#ffffff' : '#1e1b4b'
+                        },
+                        grid: {
+                            color: theme === 'dark-theme' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'
+                        }
+                    },
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Game',
+                            color: theme === 'dark-theme' ? '#ffffff' : '#1e1b4b'
+                        },
+                        ticks: {
+                            color: theme === 'dark-theme' ? '#ffffff' : '#1e1b4b',
+                            maxRotation: 45,
+                            minRotation: 0
+                        },
+                        grid: {
+                            display: false
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        labels: {
+                            color: theme === 'dark-theme' ? '#ffffff' : '#1e1b4b'
+                        }
+                    }
+                },
+                barPercentage: 0.2,
+                categoryPercentage: 0.8
+            }
+        });
+    }
+
+    // Total Payouts Pie Chart (unchanged)
+    const payoutsCtx = document.getElementById('payouts-chart')?.getContext('2d');
+    if (payoutsCtx) {
+        payoutsChart = new Chart(payoutsCtx, {
+            type: 'pie',
+            data: {
+                labels: ['Lotto', 'EuroMillions', 'Thunderball', 'Set For Life'],
+                datasets: [{
+                    data: [10, 5, 8, 12],
+                    backgroundColor: theme === 'dark-theme' ? [
+                        'rgba(45, 212, 191, 0.6)',  // Teal
+                        'rgba(250, 204, 21, 0.6)',  // Yellow
+                        'rgba(75, 85, 99, 0.6)',    // Gray
+                        'rgba(30, 27, 75, 0.6)'     // Dark Blue
+                    ] : [
+                        'rgba(45, 212, 191, 0.8)',  // Teal
+                        'rgba(250, 204, 21, 0.8)',  // Yellow
+                        'rgba(75, 85, 99, 0.8)',    // Gray
+                        'rgba(30, 27, 75, 0.8)'     // Dark Blue
+                    ],
+                    borderColor: theme === 'dark-theme' ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: {
+                            color: theme === 'dark-theme' ? '#ffffff' : '#1e1b4b'
+                        }
+                    }
+                }
+            }
+        });
+    }
+}
+
+function updateCharts() {
+    if (resultsChart) {
+        resultsChart.data.datasets[0].backgroundColor = theme === 'dark-theme' ? [
+            'rgba(45, 212, 191, 0.6)',  // Teal for Lotto
+            'rgba(30, 27, 75, 0.6)',    // Dark Blue for EuroMillions
+            'rgba(250, 204, 21, 0.6)',  // Yellow for Thunderball
+            'rgba(75, 85, 99, 0.6)'     // Gray for Set For Life
+        ] : [
+            'rgba(45, 212, 191, 0.8)',  // Teal for Lotto
+            'rgba(30, 27, 75, 0.8)',    // Dark Blue for EuroMillions
+            'rgba(250, 204, 21, 0.8)',  // Yellow for Thunderball
+            'rgba(75, 85, 99, 0.8)'     // Gray for Set For Life
+        ];
+        resultsChart.data.datasets[0].borderColor = theme === 'dark-theme' ? [
+            'rgba(45, 212, 191, 1)',    // Teal
+            'rgba(30, 27, 75, 1)',      // Dark Blue
+            'rgba(250, 204, 21, 1)',    // Yellow
+            'rgba(75, 85, 99, 1)'       // Gray
+        ] : [
+            'rgba(45, 212, 191, 1)',    // Teal
+            'rgba(30, 27, 75, 1)',      // Dark Blue
+            'rgba(250, 204, 21, 1)',    // Yellow
+            'rgba(75, 85, 99, 1)'       // Gray
+        ];
+        resultsChart.options.scales.y.title.color = theme === 'dark-theme' ? '#ffffff' : '#1e1b4b';
+        resultsChart.options.scales.y.ticks.color = theme === 'dark-theme' ? '#ffffff' : '#1e1b4b';
+        resultsChart.options.scales.y.grid.color = theme === 'dark-theme' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+        resultsChart.options.scales.x.title.color = theme === 'dark-theme' ? '#ffffff' : '#1e1b4b';
+        resultsChart.options.scales.x.ticks.color = theme === 'dark-theme' ? '#ffffff' : '#1e1b4b';
+        resultsChart.options.plugins.legend.labels.color = theme === 'dark-theme' ? '#ffffff' : '#1e1b4b';
+        resultsChart.update();
+    }
+    if (payoutsChart) {
+        payoutsChart.data.datasets[0].backgroundColor = theme === 'dark-theme' ? [
+            'rgba(45, 212, 191, 0.6)',  // Teal
+            'rgba(250, 204, 21, 0.6)',  // Yellow
+            'rgba(75, 85, 99, 0.6)',    // Gray
+            'rgba(30, 27, 75, 0.6)'     // Dark Blue
+        ] : [
+            'rgba(45, 212, 191, 0.8)',  // Teal
+            'rgba(250, 204, 21, 0.8)',  // Yellow
+            'rgba(75, 85, 99, 0.8)',    // Gray
+            'rgba(30, 27, 75, 0.8)'     // Dark Blue
+        ];
+        payoutsChart.data.datasets[0].borderColor = theme === 'dark-theme' ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.1)';
+        payoutsChart.options.plugins.legend.labels.color = theme === 'dark-theme' ? '#ffffff' : '#1e1b4b';
+        payoutsChart.update();
+    }
+}
+
+        // Auth Form
+        document.getElementById('auth-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            if (!email || !password) {
+                showToast('Please fill in all fields.');
+                return;
+            }
+            user = { email };
+            showScreen('profile-screen');
+            document.getElementById('logout-btn').classList.remove('hidden');
+        });
+
+        // SSO Buttons
+        ['google-login', 'apple-login', 'microsoft-login'].forEach(id => {
+            document.getElementById(id).addEventListener('click', () => {
+                user = { email: `${id.split('-')[0]}@example.com` };
+                showScreen('profile-screen');
+                document.getElementById('logout-btn').classList.remove('hidden');
+            });
+        });
+
+        // Logout
+        document.getElementById('logout-btn').addEventListener('click', () => {
+            user = null;
+            tickets = [];
+            updateBasket();
+            showScreen('auth-screen');
+            document.getElementById('logout-btn').classList.add('hidden');
+        });
+
+        // Profile Sections
+        document.querySelectorAll('#profile-screen .card[data-section]').forEach(card => {
+            card.addEventListener('click', () => {
+                const sectionId = card.getAttribute('data-section');
+                document.querySelectorAll('#section-content > div').forEach(div => div.classList.add('hidden'));
+                document.getElementById(sectionId).classList.remove('hidden');
+                document.getElementById('section-content').classList.remove('hidden');
+                if (sectionId === 'results-payouts' || sectionId === 'total-payouts') {
+                    if (!resultsChart || !payoutsChart) {
+                        createCharts();
+                    }
+                }
+            });
+        });
+
+        // Play Button
+        document.getElementById('play-btn').addEventListener('click', () => {
+            showScreen('game-selection-screen');
+        });
+
+        // Game Selection
+        document.querySelectorAll('#game-selection-screen .card[data-game]').forEach(card => {
+            card.addEventListener('click', () => {
+                selectedGame = card.getAttribute('data-game');
+                const gameHints = {
+                    'lotto': 'Pick 6 numbers from 1 to 59. Match all 6 to win the jackpot! Draws on Wednesday and Saturday.',
+                    'euromillions': 'Pick 5 numbers from 1 to 50 and 2 Lucky Stars from 1 to 12. Draws on Tuesday and Friday.',
+                    'thunderball': 'Pick 5 numbers from 1 to 39 and 1 Thunderball from 1 to 14. Draws on Tuesday, Wednesday, Friday, and Saturday.',
+                    'setforlife': 'Pick 5 numbers from 1 to 47 and 1 Life Ball from 1 to 10. Win £10,000 every month for 30 years! Draws on Monday and Thursday.'
+                };
+                document.getElementById('game-title').textContent = `Play ${selectedGame.charAt(0).toUpperCase() + selectedGame.slice(1)}`;
+                document.getElementById('game-hint').textContent = gameHints[selectedGame];
+                showScreen('ticket-selection-screen');
+                populateNumberSelection();
+            });
+        });
+
+        // Number Selection
+        function populateNumberSelection() {
+            const numberSelection = document.getElementById('number-selection');
+            numberSelection.innerHTML = '';
+            const maxNumber = selectedGame === 'lotto' ? 59 : selectedGame === 'euromillions' ? 50 : selectedGame === 'thunderball' ? 39 : 47;
+            const maxPicks = selectedGame === 'lotto' ? 6 : 5;
+            const maxExtraPicks = selectedGame === 'euromillions' ? 2 : 1;
+            const extraMax = selectedGame === 'euromillions' ? 12 : selectedGame === 'thunderball' ? 14 : 10;
+
+            // Main Numbers
+            const mainGrid = document.createElement('div');
+            mainGrid.className = 'number-selection-grid';
+            for (let i = 1; i <= maxNumber; i++) {
+                const button = document.createElement('button');
+                button.textContent = i;
+                button.className = `number-btn ${selectedNumbers.includes(i) ? 'selected' : 'unselected'}`;
+                button.addEventListener('click', () => {
+                    if (selectedNumbers.includes(i)) {
+                        selectedNumbers = selectedNumbers.filter(n => n !== i);
+                        button.className = 'number-btn unselected';
+                    } else if (selectedNumbers.length < maxPicks) {
+                        selectedNumbers.push(i);
+                        button.className = 'number-btn selected';
+                    }
+                });
+                mainGrid.appendChild(button);
+            }
+            numberSelection.appendChild(mainGrid);
+
+            // Extra Numbers (Lucky Stars, Thunderball, Life Ball)
+            if (['euromillions', 'thunderball', 'setforlife'].includes(selectedGame)) {
+                const extraLabel = selectedGame === 'euromillions' ? 'Lucky Stars' : selectedGame === 'thunderball' ? 'Thunderball' : 'Life Ball';
+                const extraDiv = document.createElement('div');
+                extraDiv.className = 'mt-6';
+                extraDiv.innerHTML = `<h4 class="text-lg font-semibold mb-3">${extraLabel}</h4>`;
+                const extraGrid = document.createElement('div');
+                extraGrid.className = 'extra-number-grid';
+                for (let i = 1; i <= extraMax; i++) {
+                    const button = document.createElement('button');
+                    button.textContent = i;
+                    button.className = `number-btn ${extraNumbers.includes(i) ? 'selected' : 'unselected'}`;
+                    button.addEventListener('click', () => {
+                        if (extraNumbers.includes(i)) {
+                            extraNumbers = extraNumbers.filter(n => n !== i);
+                            button.className = 'number-btn unselected';
+                        } else if (extraNumbers.length < maxExtraPicks) {
+                            extraNumbers.push(i);
+                            button.className = 'number-btn selected';
+                        }
+                    });
+                    extraGrid.appendChild(button);
+                }
+                extraDiv.appendChild(extraGrid);
+                numberSelection.appendChild(extraDiv);
+            }
+        }
+
+        // Add Ticket
+        document.getElementById('add-ticket-btn').addEventListener('click', () => {
+            const maxPicks = selectedGame === 'lotto' ? 6 : 5;
+            const maxExtraPicks = selectedGame === 'euromillions' ? 2 : selectedGame === 'thunderball' || selectedGame === 'setforlife' ? 1 : 0;
+            if (selectedNumbers.length === maxPicks && extraNumbers.length === maxExtraPicks) {
+                const ticketList = document.getElementById('selected-tickets');
+                const li = document.createElement('li');
+                const extraText = extraNumbers.length > 0 ? ` + ${extraNumbers.join(', ')}` : '';
+                li.textContent = `Ticket: ${selectedNumbers.join(', ')}${extraText} (${selectedGame})`;
+                li.className = 'text-gray-300';
+                ticketList.appendChild(li);
+                tickets.push({ game: selectedGame, numbers: [...selectedNumbers], extra: [...extraNumbers] });
+                updateBasket();
+                selectedNumbers = [];
+                extraNumbers = [];
+                populateNumberSelection();
+            } else {
+                showToast(`Please select ${maxPicks} numbers${maxExtraPicks > 0 ? ` and ${maxExtraPicks} extra number(s)` : ''}.`);
+            }
+        });
+
+        // Link Account
+        document.getElementById('link-account-btn').addEventListener('click', () => {
+            const accountId = document.getElementById('account-id').value;
+            if (accountId) {
+                const ticketList = document.getElementById('selected-tickets');
+                const li = document.createElement('li');
+                li.textContent = `Linked Ticket: Account #${accountId} (${selectedGame})`;
+                li.className = 'text-gray-300';
+                ticketList.appendChild(li);
+                tickets.push({ game: selectedGame, accountId });
+                updateBasket();
+            } else {
+                showToast('Please enter an Account ID.');
+            }
+        });
+
+        // Proceed to Investment
+        document.getElementById('proceed-btn').addEventListener('click', () => {
+            if (tickets.length === 0) {
+                showToast('Please add at least one ticket.');
+                return;
+            }
+            showScreen('investment-screen');
+            const investmentTickets = document.getElementById('investment-tickets');
+            investmentTickets.innerHTML = '';
+            tickets.forEach(ticket => {
+                const li = document.createElement('li');
+                li.textContent = ticket.accountId ? `Linked Ticket: Account #${ticket.accountId} (${ticket.game})` : `Ticket: ${ticket.numbers.join(', ')}${ticket.extra?.length > 0 ? ` + ${ticket.extra.join(', ')}` : ''} (${ticket.game})`;
+                li.className = 'text-gray-300';
+                investmentTickets.appendChild(li);
+            });
+            updateLiveStats();
+        });
+
+        // Mode Selection
+        document.querySelectorAll('#investment-screen .btn-primary').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('#investment-screen .btn-primary').forEach(b => b.className = 'btn-primary flex-1');
+                btn.className = 'btn-primary flex-1 bg-teal-400 text-white';
+                mode = btn.id.replace('-mode', '');
+            });
+        });
+
+        // Share Slider
+        const shareSlider = document.getElementById('share-slider');
+        const shareCount = document.getElementById('share-count');
+        const shareCost = document.getElementById('share-cost');
+        shareSlider.addEventListener('input', () => {
+            shares = shareSlider.value;
+            shareCount.textContent = shares;
+            shareCost.textContent = (shares * 0.25).toFixed(2);
+            updateTotalCost();
+        });
+
+        // Insurance and Cost
+        const basicInsurance = document.getElementById('basic-insurance');
+        const premiumInsurance = document.getElementById('premium-insurance');
+        function updateTotalCost() {
+            let total = shares * 0.25;
+            if (basicInsurance.checked) total += 0.25;
+            if (premiumInsurance.checked) total += 0.25;
+            document.getElementById('total-cost').textContent = total.toFixed(2);
+        }
+        basicInsurance.addEventListener('change', () => {
+            insurance.basic = basicInsurance.checked;
+            updateTotalCost();
+        });
+        premiumInsurance.addEventListener('change', () => {
+            insurance.premium = premiumInsurance.checked;
+            updateTotalCost();
+        });
+
+        // Live Stats
+        function updateLiveStats() {
+            const livePlayers = document.getElementById('live-players');
+            const winChance = document.getElementById('win-chance');
+            setInterval(() => {
+                livePlayers.textContent = Math.floor(Math.random() * 1000) + 100;
+                winChance.textContent = (Math.random() * 10).toFixed(1) + '%';
+            }, 5000);
+        }
+
+        // Proceed to Payment
+        document.getElementById('to-payment-btn').addEventListener('click', () => {
+            showScreen('payment-screen');
+        });
+
+        // Payment
+        document.getElementById('pay-btn').addEventListener('click', () => {
+            const paymentMethod = document.querySelector('input[name="payment"]:checked');
+            if (!paymentMethod) {
+                showToast('Please select a payment method.');
+                return;
+            }
+            document.getElementById('payment-message').classList.remove('hidden');
+            confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+            setTimeout(() => {
+                tickets = [];
+                updateBasket();
+                showScreen('profile-screen');
+                document.getElementById('payment-message').classList.add('hidden');
+            }, 4000);
+        });
+
+        // logo button
+        document.getElementById('logo-btn').addEventListener('click', () => {
+            showScreen('profile-screen');
+        });
+
+        // Initialize points counter (placeholder)
+        let userPoints = 0;
+        document.getElementById('points-counter').textContent = userPoints;
+
+        // Add event listener for Knowledge Box button
+        document.getElementById('knowledge-box-btn').addEventListener('click', () => {
+            console.log('Knowledge Box button clicked, navigating to knowledge-box-screen');
+            showScreen('knowledge-box-screen');
+        });
+
+        // Inside showScreen function, replace the back button and navStack logic
+        // After document.querySelectorAll('.screen').forEach(screen => screen.classList.add('hidden'));
+        const backBtnContainer = document.getElementById('back-btn-container');
+        if (backBtnContainer) {
+            backBtnContainer.style.display = id === 'auth-screen' ? 'none' : 'flex';
+        }
+        if (id !== navStack[navStack.length - 1] && id !== navStack[navStack.length - 2]) {
+            navStack.push(id);
+        }
+        console.log('navStack updated:', navStack); // Debug log
+
+        // Initialize
+        showScreen('auth-screen');
+        updateBasket();        
+    </script>
+    <!-- Add or replace inside <script> before </body> -->
+<script>
+    // Define books data
+    const books = {
+        'life': {
+            title: 'Life Book Series',
+            gifPath: 'Knowledge/vid.gif', // Placeholder
+            quiz: [
+                { question: 'What do life books often explore?', options: ['Technology', 'Relationships', 'Space', 'Horror'], correct: 'Relationships' },
+                { question: 'What is a goal of life books?', options: ['Fear', 'Inspiration', 'Confusion', 'Anger'], correct: 'Inspiration' },
+                { question: 'What format are many life books?', options: ['Memoir', 'Textbook', 'Manual', 'Fiction'], correct: 'Memoir' }
+            ]
+        },
+        'time-management': {
+            title: 'Time Management Book Series',
+            videoUrl: 'https://www.youtube.com/embed/dQw4w9WgXcQ',
+            quiz: [
+                { question: 'What is a key time management skill?', options: ['Procrastination', 'Prioritization', 'Distraction', 'Chaos'], correct: 'Prioritization' },
+                { question: 'What tool helps manage time?', options: ['Calendar', 'Novel', 'Game', 'Movie'], correct: 'Calendar' },
+                { question: 'What does time management improve?', options: ['Stress', 'Productivity', 'Sleep', 'Hunger'], correct: 'Productivity' }
+            ]
+        },
+        'ai-automate': {
+            title: 'AI Automate Book Series',
+            videoUrl: 'https://www.youtube.com/embed/dQw4w9WgXcQ',
+            quiz: [
+                { question: 'What do AI automate books focus on?', options: ['Cooking', 'Automation', 'Poetry', 'Dance'], correct: 'Automation' },
+                { question: 'What is an AI application?', options: ['Baking', 'Machine Learning', 'Painting', 'Singing'], correct: 'Machine Learning' },
+                { question: 'What do AI books often discuss?', options: ['Recipes', 'Ethics', 'Songs', 'Games'], correct: 'Ethics' }
+            ]
+        },
+        'productivity': {
+            title: 'Productivity Book Series',
+            videoUrl: 'https://www.youtube.com/embed/dQw4w9WgXcQ',
+            quiz: [
+                { question: 'What do productivity books improve?', options: ['Laziness', 'Efficiency', 'Distraction', 'Chaos'], correct: 'Efficiency' },
+                { question: 'What is a productivity technique?', options: ['Procrastination', 'Pomodoro', 'Sleeping', 'Gaming'], correct: 'Pomodoro' },
+                { question: 'What do productivity books reduce?', options: ['Focus', 'Waste', 'Energy', 'Success'], correct: 'Waste' }
+            ]
+        },
+        'crime': {
+            title: 'Crime Book Series',
+            videoUrl: 'https://www.youtube.com/embed/dQw4w9WgXcQ',
+            quiz: [
+                { question: 'What is a common theme in crime novels?', options: ['Romance', 'Mystery', 'Fantasy', 'Comedy'], correct: 'Mystery' },
+                { question: 'Who is a famous crime author?', options: ['J.K. Rowling', 'Agatha Christie', 'Stephen King', 'Dan Brown'], correct: 'Agatha Christie' },
+                { question: 'What motivates detectives in crime stories?', options: ['Wealth', 'Justice', 'Fame', 'Power'], correct: 'Justice' }
+            ]
+        },
+        'business': {
+            title: 'Business Book Series',
+            videoUrl: 'https://www.youtube.com/embed/dQw4w9WgXcQ',
+            quiz: [
+                { question: 'What do business books teach?', options: ['Cooking', 'Strategy', 'Poetry', 'Dance'], correct: 'Strategy' },
+                { question: 'What is a common business topic?', options: ['Leadership', 'Gardening', 'Fiction', 'Sports'], correct: 'Leadership' },
+                { question: 'What do business books analyze?', options: ['Recipes', 'Case Studies', 'Poems', 'Songs'], correct: 'Case Studies' }
+            ]
+        },
+        'entertainment': {
+            title: 'Entertainment Book Series',
+            videoUrl: 'https://www.youtube.com/embed/dQw4w9WgXcQ',
+            quiz: [
+                { question: 'What do entertainment books often include?', options: ['Math', 'Celebrity Stories', 'Physics', 'Coding'], correct: 'Celebrity Stories' },
+                { question: 'What is a goal of entertainment books?', options: ['Boredom', 'Amusement', 'Stress', 'Work'], correct: 'Amusement' },
+                { question: 'What format are entertainment books?', options: ['Textbook', 'Biography', 'Manual', 'Code'], correct: 'Biography' }
+            ]
+        },
+        'self-help': {
+            title: 'Self-Help Book Series',
+            videoUrl: 'https://www.youtube.com/embed/dQw4w9WgXcQ',
+            quiz: [
+                { question: 'What do self-help books aim to improve?', options: ['Weather', 'Mindset', 'Traffic', 'Food'], correct: 'Mindset' },
+                { question: 'What is a common self-help topic?', options: ['Cooking', 'Motivation', 'Fiction', 'Sports'], correct: 'Motivation' },
+                { question: 'What do self-help books offer?', options: ['Recipes', 'Advice', 'Poems', 'Games'], correct: 'Advice' }
+            ]
+        },
+        'nostalgic': {
+            title: 'Nostalgic Book Series',
+            videoUrl: 'https://www.youtube.com/embed/dQw4w9WgXcQ',
+            quiz: [
+                { question: 'What do nostalgic books evoke?', options: ['Fear', 'Memories', 'Anger', 'Chaos'], correct: 'Memories' },
+                { question: 'What era do nostalgic books cover?', options: ['Future', 'Past', 'Fantasy', 'Space'], correct: 'Past' },
+                { question: 'What is a nostalgic book theme?', options: ['Tech', 'Childhood', 'Horror', 'War'], correct: 'Childhood' }
+            ]
+        },
+        'story': {
+            title: 'Story Book Series',
+            videoUrl: 'https://www.youtube.com/embed/dQw4w9WgXcQ',
+            quiz: [
+                { question: 'What do story books emphasize?', options: ['Facts', 'Narrative', 'Data', 'Code'], correct: 'Narrative' },
+                { question: 'What is a common story genre?', options: ['Manual', 'Fiction', 'Textbook', 'Math'], correct: 'Fiction' },
+                { question: 'What do story books create?', options: ['Confusion', 'Worlds', 'Stress', 'Loss'], correct: 'Worlds' }
+            ]
+        }
+    };
+
+    // Initialize navStack
+    let navStack = [];
+    if (!document.getElementById('auth-screen').classList.contains('hidden')) {
+        navStack.push('auth-screen');
+    } else {
+        navStack.push('profile-screen');
+    }
+
+    // Initialize points counter
+    let userPoints = 0;
+    let totalStars = 0; // Added for total stars
+    const pointsCounter = document.getElementById('points-counter');
+    const starsDisplay = document.getElementById('stars-display'); // Added for stars display
+    if (pointsCounter) {
+        pointsCounter.textContent = userPoints;
+    }
+    if (starsDisplay) {
+        starsDisplay.textContent = '☆☆☆☆☆'; // Initial empty stars
+    }
+
+    // showScreen function
+    function showScreen(id, bookId = null) {
+        console.log('showScreen called with id:', id, 'bookId:', bookId);
+        document.querySelectorAll('.screen').forEach(screen => {
+            screen.classList.add('hidden');
+        });
+        const targetScreen = document.getElementById(id);
+        if (targetScreen) {
+            targetScreen.classList.remove('hidden');
+            if (id === 'book-detail-screen' && bookId && books[bookId]) {
+                targetScreen.dataset.bookId = bookId;
+                document.getElementById('book-title').textContent = books[bookId].title;
+                document.getElementById('book-gif').src = books[bookId].gifPath;
+                const quizContainer = document.getElementById('quiz-questions');
+                quizContainer.innerHTML = books[bookId].quiz.map((q, index) => `
+                    <div class="mb-4">
+                        <p class="text-white light:text-gray-900 font-medium">${index + 1}. ${q.question}</p>
+                        ${q.options.map(option => `
+                            <label class="block text-white light:text-gray-900">
+                                <input type="radio" name="q${index}" value="${option}" class="mr-2">
+                                ${option}
+                            </label>
+                        `).join('')}
+                    </div>
+                `).join('');
+                document.getElementById('quiz-result').classList.add('hidden');
+            }
+        } else {
+            console.error('Target screen not found:', id);
+        }
+        const backBtnContainer = document.getElementById('back-btn-container');
+        if (backBtnContainer) {
+            backBtnContainer.style.display = id === 'auth-screen' ? 'none' : 'flex';
+        }
+        if (id !== navStack[navStack.length - 1] && id !== navStack[navStack.length - 2]) {
+            navStack.push(id);
+        }
+        console.log('navStack updated:', navStack);
+    }
+
+    // Back button logic
+    const backBtn = document.getElementById('back-btn');
+    if (backBtn) {
+        backBtn.addEventListener('click', () => {
+            console.log('Back button clicked, navStack:', navStack);
+            if (navStack.length > 1) {
+                navStack.pop();
+                const prevScreen = navStack[navStack.length - 1];
+                console.log('Navigating to:', prevScreen);
+                showScreen(prevScreen);
+            } else {
+                console.log('No previous screen in navStack');
+            }
+        });
+    }
+
+    // Quiz submission logic
+    const submitQuizBtn = document.getElementById('submit-quiz');
+if (submitQuizBtn) {
+    submitQuizBtn.addEventListener('click', () => {
+        const bookId = document.getElementById('book-detail-screen').dataset.bookId;
+        if (!bookId || !books[bookId]) {
+            console.error('Book ID not found for quiz');
+            return;
+        }
+        let score = 0;
+        books[bookId].quiz.forEach((q, index) => {
+            const selected = document.querySelector(`input[name="q${index}"]:checked`);
+            if (selected && selected.value === q.correct) {
+                score += 10;
+            }
+        });
+        // Calculate stars (0–30 points → 0–5 stars)
+        let stars = 0;
+        if (score === 10) stars = 1;
+        else if (score === 20) stars = 3;
+        else if (score === 30) stars = 5;
+        totalStars = Math.min(totalStars + stars, 5); // Cap at 5 stars
+        const starIcons = '★'.repeat(stars) + '☆'.repeat(5 - stars); // Per quiz
+        const totalStarIcons = '★'.repeat(totalStars) + '☆'.repeat(5 - totalStars); // Total
+        userPoints += score;
+        if (pointsCounter) {
+            pointsCounter.textContent = userPoints;
+        }
+        if (starsDisplay) {
+            starsDisplay.textContent = totalStarIcons; // Update nav bar stars
+        }
+        const resultEl = document.getElementById('quiz-result');
+        resultEl.innerHTML = `You scored ${score} points! ${starIcons}<br>Total points: ${userPoints}`;
+        resultEl.classList.remove('hidden');
+        console.log('Quiz submitted, score:', score, 'stars:', stars, 'total stars:', totalStars, 'total points:', userPoints);
+    });
+}
+</script>
+</body>
+</html>
